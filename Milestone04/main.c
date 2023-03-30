@@ -46,8 +46,6 @@ pthread_mutex_t     DoneLock;
 
 int                 CountExpected = 0;
 
-pthread_cond_t StackCond;
-
 struct ThreadDataProduce
 {
     int Iterations;
@@ -297,6 +295,7 @@ int main (int argc, char *argv[])
     pthread_mutex_init(&StackLock, 0);
     pthread_mutex_init(&FoundLock, 0);
     pthread_mutex_init(&DoneLock, 0);
+    pthread_cond_init(&StackCond, 0);
 
     if(argc < 4)
     {

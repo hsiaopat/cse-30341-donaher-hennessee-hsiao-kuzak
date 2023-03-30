@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <sys/time.h>
 
 #include "byteblock.h"
 
@@ -26,12 +27,13 @@
 
 /* Use condition variables? */
 //  Uncomment to enable this
-/* #define USE_CONDITION_VARS      */
+#define USE_CONDITION_VARS
 
 
 
 /* The global queue */
 pthread_mutex_t     StackLock;
+pthread_cond_t      StackCond;
 struct ByteBlock *  StackItems[STACK_MAX_SIZE];
 int                 StackSize = 0;
 char                KeepGoing = 1;
@@ -43,6 +45,8 @@ int                 CountDone = 0;
 pthread_mutex_t     DoneLock;
 
 int                 CountExpected = 0;
+
+pthread_cond_t StackCond;
 
 struct ThreadDataProduce
 {
@@ -61,6 +65,19 @@ char stack_ts_cv_push (struct ByteBlock * pBlock)
 {
     /* Condition variable version */
     /* Your code goes here! */
+    pthread_mutex_lock(&StackLock);
+
+    while (StackSize == STACK_MAX_SIZE) {
+        /* wait until stack is non-full */
+        pthread_cond_wait(&StackCond, &StackLock);
+    }
+
+    StackItems[StackSize] = pBlock;
+    StackSize++;
+
+    pthread_cond_signal(&StackCond);
+    pthread_mutex_unlock(&StackLock);
+
     return 0;
 }
 
@@ -84,7 +101,24 @@ char stack_ts_push (struct ByteBlock * pBlock)
 
 struct ByteBlock * stack_ts_cv_pop ()
 {
-    return NULL;
+    /* Condition variable version */
+    /* Your code goes here! */
+    struct ByteBlock * pBlock;
+
+    pthread_mutex_lock(&StackLock);
+
+    while (StackSize == 0) {
+        /* wait until stack in non-empty */
+        pthread_cond_wait(&StackCond, &StackLock);
+    }
+
+    /* pop */
+    pBlock = StackItems[StackSize-1];
+    StackSize--;
+
+    pthread_mutex_unlock(&StackLock);
+
+    return pBlock;
 }
 
 struct ByteBlock * stack_ts_pop ()
@@ -127,7 +161,7 @@ void * thread_producer (void * pData)
 
     while(KeepGoing)
     {
-        //printf("Thread %d - Iterations To Go: %d\n", ThreadID, IterationsToGo);
+        printf("Thread %d - Iterations To Go: %d\n", ThreadID, IterationsToGo);
 
         if(IterationsToGo <= 0)
         {
@@ -179,7 +213,7 @@ void * thread_producer (void * pData)
         IterationsToGo--;
     }
 
-//    printf("Producer thread %d is done!\n", ThreadID);
+    printf("Producer thread %d is done!\n", ThreadID);
     return NULL;
 }
 
@@ -224,7 +258,7 @@ void * thread_consumer (void * pData)
 
         if(pBlock != NULL)
         {
-            //printf("Thread %d - Operating on a Block\n", ThreadID);
+            printf("Thread %d - Operating on a Block\n", ThreadID);
 
             /* Search the block to see how many times the requested string appears */
             for(int j=0; j<pBlock->nSize - strlen(SearchString); j++)
@@ -249,7 +283,7 @@ void * thread_consumer (void * pData)
         }     
     }
 
-//    printf("Consumer thread %d is done!\n", ThreadID);
+    printf("Consumer thread %d is done!\n", ThreadID);
     return NULL;
 }
 
@@ -274,10 +308,20 @@ int main (int argc, char *argv[])
     }
 
     // TODO: Measure start time here!
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
 
-    nThreadsProducers = atoi(argv[1]);
-    nThreadsConsumers = atoi(argv[2]);
-    nIterations = atoi(argv[3]);
+    if ((nThreadsProducers = atoi(argv[1])) == 0) {
+        printf("Invalid input for Producers\n");
+    }
+
+    if ((nThreadsConsumers = atoi(argv[2])) == 0) {
+        printf("Invalid input for Consumers\n");
+    }
+
+    if ((nIterations = atoi(argv[3])) == 0) {
+        printf("Invalid input for Iterations\n");
+    }
 
     pthread_t *     pThreadProducers;
     pthread_t *     pThreadConsumers;
@@ -320,9 +364,10 @@ int main (int argc, char *argv[])
 
     // TODO: Measure stop time here!
     //  Output the total runtime in an appropriate unit
+    printf("Seconds: %ld\n", tv.tv_sec);
+    printf("Microseconds: %ld\n", tv.tv_usec);
 
     printf("Drumroll please .... %d occurrences of `the'\n", CountFound);
-
 
     return 0;
 }

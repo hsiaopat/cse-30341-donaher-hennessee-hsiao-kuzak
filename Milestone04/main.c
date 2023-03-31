@@ -30,8 +30,6 @@ char * strdup(const char *s);
 //  Uncomment to enable this
 #define USE_CONDITION_VARS 
 
-
-
 /* The global queue */
 pthread_mutex_t     StackLock;
 struct ByteBlock *  StackItems[STACK_MAX_SIZE];
@@ -73,10 +71,13 @@ char stack_ts_cv_push (struct ByteBlock * pBlock)
         pthread_cond_wait(&PushCond, &StackLock);
     }
 
+    /* push */
     StackItems[StackSize] = pBlock;
     StackSize++;
 
+    /* signal consumer threads */
     pthread_cond_signal(&PopCond);
+
     pthread_mutex_unlock(&StackLock);
 
     return 1;
@@ -111,13 +112,13 @@ struct ByteBlock * stack_ts_cv_pop ()
     while (StackSize <= 0) {
         pthread_mutex_lock(&DoneLock); 
 
-        /* done */
+        /* if done */
         if (CountExpected == CountDone) {
             pthread_mutex_unlock(&DoneLock);
             pthread_cond_broadcast(&PopCond);
             pthread_mutex_unlock(&StackLock);
             return NULL;
-        /* not done */
+        /* if not done */
         } else {
             pthread_mutex_unlock(&DoneLock);
             pthread_cond_wait(&PopCond, &StackLock);
@@ -128,7 +129,7 @@ struct ByteBlock * stack_ts_cv_pop ()
     pBlock = StackItems[StackSize-1];
     StackSize--;
 
-    /* increment completed blocks */
+    /* increment completed task count */
     pthread_mutex_lock(&DoneLock);
     CountDone++;
     pthread_mutex_unlock(&DoneLock);
@@ -168,21 +169,21 @@ void * thread_producer (void * pData)
     int     IterationsToGo;
     int     nRandom;
     struct ByteBlock *  pBlock;
-    int     ThreadID;
+    //int     ThreadID;
 
     struct ThreadDataProduce * pThreadData;
 
     pThreadData = (struct ThreadDataProduce *) pData;
 
     IterationsToGo = pThreadData->Iterations;
-    ThreadID = pThreadData->ThreadID;
+    //ThreadID = pThreadData->ThreadID;
 
     /* Copied - get rid of the malloc'd allocation */
     free(pThreadData);
 
     while(KeepGoing)
     {
-        printf("Thread %d - Iterations To Go: %d\n", ThreadID, IterationsToGo);
+        //printf("Thread %d - Iterations To Go: %d\n", ThreadID, IterationsToGo);
 
         if(IterationsToGo <= 0)
         {
@@ -234,7 +235,8 @@ void * thread_producer (void * pData)
         IterationsToGo--;
     }
 
-    printf("Producer thread %d is done!\n", ThreadID);
+    //printf("Producer thread %d is done!\n", ThreadID);
+    
     return NULL;
 }
 
@@ -244,11 +246,11 @@ void * thread_consumer (void * pData)
     struct ThreadDataConsume * pThreadData;
     char * SearchString;
     struct ByteBlock * pBlock;
-    int     ThreadID;
+    //int     ThreadID;
 
     pThreadData = (struct ThreadDataConsume *) pData;
 
-    ThreadID = pThreadData->ThreadID;
+    //ThreadID = pThreadData->ThreadID;
     SearchString = (char *) pThreadData->SearchString;
 
     /* Copied - get rid of the malloc'd allocation */
@@ -279,8 +281,7 @@ void * thread_consumer (void * pData)
 
         if(pBlock != NULL)
         {
-
-            printf("Thread %d - Operating on a Block\n", ThreadID);
+            //printf("Thread %d - Operating on a Block\n", ThreadID);
      
             /* Search the block to see how many times the requested string appears */
             for(int j=0; j<pBlock->nSize - strlen(SearchString); j++)
@@ -301,7 +302,7 @@ void * thread_consumer (void * pData)
         }     
     }
 
-    printf("Consumer thread %d is done!\n", ThreadID);
+    //printf("Consumer thread %d is done!\n", ThreadID);
 
     return NULL;
 }
@@ -329,20 +330,26 @@ int main (int argc, char *argv[])
     }
 
     // TODO: Measure start time here!
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
+    struct timeval timeStart, timeStop;
+    
+    gettimeofday(&timeStart, NULL);
+    double startSec = timeStart.tv_sec;
+    double startMicroSec = timeStart.tv_usec;
+    double startTime = startSec + (startMicroSec/1000000.0);
 
-
-    if ((nThreadsProducers = atoi(argv[1])) == 0) {
+    if ((nThreadsProducers = atoi(argv[1])) <= 0) {
         printf("Invalid input for Producers\n");
+        return -1;
     }
 
-    if ((nThreadsConsumers = atoi(argv[2])) == 0) {
+    if ((nThreadsConsumers = atoi(argv[2])) <= 0) {
         printf("Invalid input for Consumers\n");
+        return -1;
     }
 
-    if ((nIterations = atoi(argv[3])) == 0) {
+    if ((nIterations = atoi(argv[3])) <= 0) {
         printf("Invalid input for Iterations\n");
+        return -1;
     }
 
     pthread_t *     pThreadProducers;
@@ -386,11 +393,13 @@ int main (int argc, char *argv[])
 
     // TODO: Measure stop time here!
     //  Output the total runtime in an appropriate unit
-    printf("Seconds: %ld\n", tv.tv_sec);
-    printf("Microseconds: %ld\n", tv.tv_usec);
+    gettimeofday(&timeStop, NULL);
+    double stopSec = timeStop.tv_sec;
+    double stopMicroSec = timeStop.tv_usec;
+    double stopTime = stopSec + (stopMicroSec/1000000.0);
 
-    printf("Drumroll please .... %d occurrences of `the'\n", CountFound);
+    printf("Total runtime: %lfs\n", (stopTime - startTime));
+    printf("Drumroll please .... %d occurrences of 'the'\n", CountFound);
 
     return 0;
 }
-

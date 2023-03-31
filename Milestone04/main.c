@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+char * strdup(const char *s);
 #include <string.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -27,16 +28,18 @@
 
 /* Use condition variables? */
 //  Uncomment to enable this
-#define USE_CONDITION_VARS
+#define USE_CONDITION_VARS 
 
 
 
 /* The global queue */
 pthread_mutex_t     StackLock;
-pthread_cond_t      StackCond;
 struct ByteBlock *  StackItems[STACK_MAX_SIZE];
 int                 StackSize = 0;
 char                KeepGoing = 1;
+
+pthread_cond_t PushCond;
+pthread_cond_t PopCond;
 
 int                 CountFound = 0;
 pthread_mutex_t     FoundLock;
@@ -65,18 +68,18 @@ char stack_ts_cv_push (struct ByteBlock * pBlock)
     /* Your code goes here! */
     pthread_mutex_lock(&StackLock);
 
-    while (StackSize == STACK_MAX_SIZE) {
+    while (StackSize >= STACK_MAX_SIZE) {
         /* wait until stack is non-full */
-        pthread_cond_wait(&StackCond, &StackLock);
+        pthread_cond_wait(&PushCond, &StackLock);
     }
 
     StackItems[StackSize] = pBlock;
     StackSize++;
 
-    pthread_cond_signal(&StackCond);
+    pthread_cond_signal(&PopCond);
     pthread_mutex_unlock(&StackLock);
 
-    return 0;
+    return 1;
 }
 
 char stack_ts_push (struct ByteBlock * pBlock)
@@ -105,17 +108,37 @@ struct ByteBlock * stack_ts_cv_pop ()
 
     pthread_mutex_lock(&StackLock);
 
-    while (StackSize == 0) {
-        /* wait until stack in non-empty */
-        pthread_cond_wait(&StackCond, &StackLock);
+    while (StackSize <= 0) {
+        pthread_mutex_lock(&DoneLock); 
+
+        /* done */
+        if (CountExpected == CountDone) {
+            pthread_mutex_unlock(&DoneLock);
+            pthread_cond_broadcast(&PopCond);
+            pthread_mutex_unlock(&StackLock);
+            return NULL;
+        /* not done */
+        } else {
+            pthread_mutex_unlock(&DoneLock);
+            pthread_cond_wait(&PopCond, &StackLock);
+        }
     }
 
     /* pop */
     pBlock = StackItems[StackSize-1];
     StackSize--;
 
-    pthread_mutex_unlock(&StackLock);
+    /* increment completed blocks */
+    pthread_mutex_lock(&DoneLock);
+    CountDone++;
+    pthread_mutex_unlock(&DoneLock);
 
+    /* signal producer and consumer threads */
+    pthread_cond_signal(&PushCond);
+    pthread_cond_signal(&PopCond);
+
+    pthread_mutex_unlock(&StackLock);
+    
     return pBlock;
 }
 
@@ -256,11 +279,13 @@ void * thread_consumer (void * pData)
 
         if(pBlock != NULL)
         {
-            printf("Thread %d - Operating on a Block\n", ThreadID);
 
+            printf("Thread %d - Operating on a Block\n", ThreadID);
+     
             /* Search the block to see how many times the requested string appears */
             for(int j=0; j<pBlock->nSize - strlen(SearchString); j++)
             {
+          
                 if(memcmp(pBlock->pData+j, SearchString, strlen(SearchString)) == 0)
                 {
                     pthread_mutex_lock(&FoundLock);
@@ -273,15 +298,11 @@ void * thread_consumer (void * pData)
 
             /* Mimic this being a really intense computation */
             sleep(DELAY_CONSUMER + ((float) rand() / (float) RAND_MAX) * RAND_DELAY_CONSUMER);
-
-            /* Adjust the completed count */
-            pthread_mutex_lock(&DoneLock);
-            CountDone++;
-            pthread_mutex_unlock(&DoneLock);
         }     
     }
 
     printf("Consumer thread %d is done!\n", ThreadID);
+
     return NULL;
 }
 
@@ -295,7 +316,8 @@ int main (int argc, char *argv[])
     pthread_mutex_init(&StackLock, 0);
     pthread_mutex_init(&FoundLock, 0);
     pthread_mutex_init(&DoneLock, 0);
-    pthread_cond_init(&StackCond, 0);
+    pthread_cond_init(&PushCond, 0);
+    pthread_cond_init(&PopCond, 0);
 
     if(argc < 4)
     {
@@ -309,6 +331,7 @@ int main (int argc, char *argv[])
     // TODO: Measure start time here!
     struct timeval tv;
     gettimeofday(&tv, NULL);
+
 
     if ((nThreadsProducers = atoi(argv[1])) == 0) {
         printf("Invalid input for Producers\n");

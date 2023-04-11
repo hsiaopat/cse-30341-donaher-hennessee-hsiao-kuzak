@@ -197,35 +197,28 @@ void processPacket (struct Packet * pPacket)
         int k;
 
         /* Are the sizes the same? */
-        if(BigTable[j].ThePacket->PayloadSize != pPacket->PayloadSize)
+        if(BigTable[j].ThePacket->PayloadSize == pPacket->PayloadSize)
         {
-            continue;
-        }
-
-        /* OK - same size - do the bytes match up? */
-        for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
-        {
-            if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
+            /* OK - same size - do the bytes match up? */
+            for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
             {
-                /* Nope - they are not the same */
-                break;
+                if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
+                {
+                    /* Nope - they are not the same */
+                    break;
+                }
             }
-        }
+            /* Did we break out with a mismatch? */
+            if(k >= BigTable[j].ThePacket->PayloadSize)
+            {
+                /* Whoot, whoot - the payloads match up */
+                BigTable[j].HitCount++;
+                BigTable[j].RedundantBytes += pPacket->PayloadSize;
 
-        /* Did we break out with a mismatch? */
-        if(k < BigTable[j].ThePacket->PayloadSize)
-        {
-            continue;
-        }
-        else 
-        {
-            /* Whoot, whoot - the payloads match up */
-            BigTable[j].HitCount++;
-            BigTable[j].RedundantBytes += pPacket->PayloadSize;
-
-            /* The packets match so get rid of the matching one */
-            discardPacket(pPacket);
-            return;
+                /* The packets match so get rid of the matching one */
+                discardPacket(pPacket);
+                return;
+            }
         }
     }
     else 
@@ -235,7 +228,6 @@ void processPacket (struct Packet * pPacket)
         BigTable[j].ThePacket = pPacket;
         BigTable[j].HitCount = 0;
         BigTable[j].RedundantBytes = 0;
-        break;
     }
     
 

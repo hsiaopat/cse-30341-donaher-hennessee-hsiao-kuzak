@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-
+#include "spooky.h"
 #include "pcap-process.h"
 
 /* How many packets have we seen? */
@@ -181,56 +181,63 @@ void processPacket (struct Packet * pPacket)
 
     /* Step 2: Do any packet payloads match up? */
 
+    /* INSERT HASHING HERE */
     int j;
+    uint64_t hash;
 
-    for(j=0; j<BigTableSize; j++)
+    // Compute hash value for the payload
+    spooky_hash128(pPacket->Data + PayloadOffset, pPacket->PayloadSize, &hash, &hash);
+
+    // Use hash value to index into table
+    j = hash % BigTableSize;
+
+
+    if(BigTable[j].ThePacket != NULL)
     {
-        if(BigTable[j].ThePacket != NULL)
+        int k;
+
+        /* Are the sizes the same? */
+        if(BigTable[j].ThePacket->PayloadSize != pPacket->PayloadSize)
         {
-            int k;
+            continue;
+        }
 
-            /* Are the sizes the same? */
-            if(BigTable[j].ThePacket->PayloadSize != pPacket->PayloadSize)
+        /* OK - same size - do the bytes match up? */
+        for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
+        {
+            if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
             {
-                continue;
+                /* Nope - they are not the same */
+                break;
             }
+        }
 
-            /* OK - same size - do the bytes match up? */
-            for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
-            {
-                if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
-                {
-                    /* Nope - they are not the same */
-                    break;
-                }
-            }
-
-            /* Did we break out with a mismatch? */
-            if(k < BigTable[j].ThePacket->PayloadSize)
-            {
-                continue;
-            }
-            else 
-            {
-                /* Whoot, whoot - the payloads match up */
-                BigTable[j].HitCount++;
-                BigTable[j].RedundantBytes += pPacket->PayloadSize;
-
-                /* The packets match so get rid of the matching one */
-                discardPacket(pPacket);
-                return;
-            }
+        /* Did we break out with a mismatch? */
+        if(k < BigTable[j].ThePacket->PayloadSize)
+        {
+            continue;
         }
         else 
         {
-            /* We made it to an empty entry without a match */
-            
-            BigTable[j].ThePacket = pPacket;
-            BigTable[j].HitCount = 0;
-            BigTable[j].RedundantBytes = 0;
-            break;
+            /* Whoot, whoot - the payloads match up */
+            BigTable[j].HitCount++;
+            BigTable[j].RedundantBytes += pPacket->PayloadSize;
+
+            /* The packets match so get rid of the matching one */
+            discardPacket(pPacket);
+            return;
         }
     }
+    else 
+    {
+        /* We made it to an empty entry without a match */
+        
+        BigTable[j].ThePacket = pPacket;
+        BigTable[j].HitCount = 0;
+        BigTable[j].RedundantBytes = 0;
+        break;
+    }
+    
 
     /* Did we search the entire table and find no matches? */
     if(j == BigTableSize)

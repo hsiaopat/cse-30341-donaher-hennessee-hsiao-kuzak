@@ -191,7 +191,6 @@ void processPacket (struct Packet * pPacket)
     // Use hash value to index into table
     j = hash % BigTableSize;
 
-
     if(BigTable[j].ThePacket != NULL)
     {
         int k;

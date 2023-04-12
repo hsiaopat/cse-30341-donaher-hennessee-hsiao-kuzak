@@ -207,7 +207,7 @@ void processPacket (struct Packet * pPacket)
                     break;
                 }
             }
-            /* Did we break out with a mismatch? */
+            /* Did we not break out with a mismatch? */
             if(k >= BigTable[j].ThePacket->PayloadSize)
             {
                 /* Whoot, whoot - the payloads match up */

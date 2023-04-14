@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <pthread.h>
 
 #include "packet.h"
 #include "pcap-read.h"
@@ -18,9 +19,28 @@
 
 #define SHOW_DEBUG	1
 
+#define STACK_MAX_SIZE 1000
+extern struct Packet * StackItems[];
+extern int StackSize;
+
+extern pthread_mutex_t StackLock;
+extern pthread_cond_t PushCond;
+extern pthread_cond_t PopCond;
 
 char parsePcapFileStart (FILE * pTheFile, struct FilePcapInfo * pFileInfo)
 {
+	if(pTheFile == NULL)
+	{
+		printf("* Error (parsePcapFileStart): FILE pointer was NULL\n");
+		return 0;
+	}
+
+	if(pFileInfo == NULL)
+	{
+		printf("* Error (parsePcapFileStart): F was NULL\n");
+		return 0;
+	}
+
 	// tcpdump header processing
 	//
 	//  Reference of file info available at:
@@ -171,7 +191,6 @@ struct Packet * readNextPacket (FILE * pTheFile, struct FilePcapInfo * pFileInfo
 	return pPacket;
 }
 
-
 char readPcapFile (struct FilePcapInfo * pFileInfo)
 {
 	FILE * pTheFile;
@@ -195,12 +214,26 @@ char readPcapFile (struct FilePcapInfo * pFileInfo)
 	}
 
 	while(!feof(pTheFile))
-	{		
+	{
 		pPacket = readNextPacket(pTheFile, pFileInfo);
-
+	
 		if(pPacket != NULL)
 		{
-			processPacket(pPacket);
+			pthread_mutex_lock(&StackLock);
+
+			while (StackSize >= STACK_MAX_SIZE) {
+        		/* wait until stack is non-full */
+        		pthread_cond_wait(&PushCond, &StackLock);
+    		}
+
+			/* push packet to global */
+			StackItems[StackSize] = pPacket;
+			StackSize++;
+
+			/* signal consumer threads */
+    		pthread_cond_signal(&PopCond);
+
+			pthread_mutex_unlock(&StackLock);
 		}
 
 		/* Allow for an early bail out if specified */

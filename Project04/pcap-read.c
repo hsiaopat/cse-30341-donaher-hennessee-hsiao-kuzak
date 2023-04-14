@@ -19,7 +19,6 @@
 
 #define SHOW_DEBUG	1
 
-#define STACK_MAX_SIZE 1000
 extern struct Packet * StackItems[];
 extern int StackSize;
 
@@ -221,16 +220,16 @@ char readPcapFile (struct FilePcapInfo * pFileInfo)
 		{
 			pthread_mutex_lock(&StackLock);
 
+			/* Stack is full, must wait :( */
 			while (StackSize >= STACK_MAX_SIZE) {
-        		/* wait until stack is non-full */
         		pthread_cond_wait(&PushCond, &StackLock);
     		}
 
-			/* push packet to global */
+			/* Push packet to global stack */
 			StackItems[StackSize] = pPacket;
 			StackSize++;
 
-			/* signal consumer threads */
+			/* Tell consumer there is a packet to pop */
     		pthread_cond_signal(&PopCond);
 
 			pthread_mutex_unlock(&StackLock);
@@ -251,6 +250,3 @@ char readPcapFile (struct FilePcapInfo * pFileInfo)
 	printf("File processing complete - %s file read containing %d packets with %d bytes of packet data\n", pFileInfo->FileName, pFileInfo->Packets, pFileInfo->BytesRead);
 	return 1;
 }
-
-
-

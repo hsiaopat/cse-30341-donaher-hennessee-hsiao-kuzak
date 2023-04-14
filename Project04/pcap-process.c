@@ -1,8 +1,6 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
-
 
 #include "pcap-process.h"
 
@@ -255,8 +253,3 @@ void tallyProcessing ()
         resetAndSaveEntry(j);
     }
 }
-
-
-
-
-

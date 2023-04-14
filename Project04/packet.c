@@ -5,7 +5,6 @@
 
 #include "packet.h"
 
-
 struct Packet * allocatePacket (uint16_t DataSize)
 {
     struct Packet * pPacket;

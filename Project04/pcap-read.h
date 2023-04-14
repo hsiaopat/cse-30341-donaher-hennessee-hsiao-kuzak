@@ -1,8 +1,8 @@
-
 #ifndef __PCAP_READ_H
 #define __PCAP_READ_H
 
-#define DEFAULT_READ_BUFFER     2500
+#define DEFAULT_READ_BUFFER 2500
+#define STACK_MAX_SIZE 1000
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +46,4 @@ struct Packet * readNextPacket (FILE * pTheFile, struct FilePcapInfo * pFileInfo
 */
 char readPcapFile (struct FilePcapInfo * pFileInfo);
 
-
 #endif
-

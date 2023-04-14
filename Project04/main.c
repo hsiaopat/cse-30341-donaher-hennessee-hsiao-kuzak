@@ -7,11 +7,11 @@
 char * strdup(const char *s);
 
 #include <string.h>
+#include <pthread.h>
 
 #include "pcap-read.h"
 #include "pcap-process.h"
 #include "packet.h"
-#include <pthread.h>
 
 pthread_mutex_t StackLock;
 pthread_mutex_t TableLock;
@@ -19,32 +19,16 @@ pthread_mutex_t TableLock;
 pthread_cond_t PushCond;
 pthread_cond_t PopCond;
 
-#define STACK_MAX_SIZE 1000 // FIXME
+int StackSize = 0;
+int AllDone = 0;
+char KeepGoing = 1;
 struct Packet * StackItems[STACK_MAX_SIZE];
 
-int StackSize = 0;
-//char KeepGoing = 1;
-
-struct ThreadDataProduce
-{
-    struct FilePcapInfo * theInfo;
-    int ThreadID;
-};
-
 void * thread_producer (void * pData) 
-{   
-    // /* unpack arguments */
-    // struct ThreadDataProduce * pThreadData;
-    // pThreadData = (struct ThreadDataProduce *) pData;
-
-    // printf("hi\n");
-    // printf("%s\n", pThreadData->theInfo->FileName);
-
+{
     struct FilePcapInfo * theInfo = (struct FilePcapInfo *) pData;
 
-    //printf("%s\n", theInfo->FileName);
-
-    /* read file and push packets */
+    /* Read file and push packets */
     readPcapFile(theInfo);
 
     return NULL;
@@ -52,29 +36,34 @@ void * thread_producer (void * pData)
 
 void * thread_consumer (void * pData)
 {
-    char KeepGoing = 1;
     struct Packet * pPacket;
 
     while (KeepGoing) {
 
         pthread_mutex_lock(&StackLock);
 
-        if (StackSize <= 0) {
-            pthread_cond_broadcast(&PopCond);
-            pthread_mutex_unlock(&StackLock);
-            return NULL;
+        /* No packets to pop, must wait :( */
+        while (StackSize <= 0) {
+            
+            pthread_cond_wait(&PopCond, &StackLock);
+
+            /* Ope, we're done! */
+            if (StackSize == 0 && AllDone) {
+                pthread_mutex_unlock(&StackLock);
+                return NULL;
+            }
         }
 
-        /* pop */
+        /* Pop packet */
         pPacket = StackItems[StackSize-1];
         StackSize--;
 
-        //pthread_cond_signal(&PushCond);
-        //pthread_cond_signal(&PopCond);
+        /* Tell producers there is room to push */
+        pthread_cond_signal(&PushCond);
 
         pthread_mutex_unlock(&StackLock);
 
-        /* process */
+        /* Process packcet */
         pthread_mutex_lock(&TableLock);
         processPacket(pPacket);
         pthread_mutex_unlock(&TableLock);
@@ -91,54 +80,35 @@ void processPcapFile(char * theFile)
     theInfo.EndianFlip = 0;
     theInfo.BytesRead = 0;
     theInfo.Packets = 0;
-    theInfo.MaxPackets = 5;
+    theInfo.MaxPackets = 0;
 
-    //int     nThreadsProducers = 1;
-    int     nThreadsConsumers = 3;
-
+    /* Producer */
     pthread_t pThreadProducer;
-    pthread_t *     pThreadConsumers;
 
-    /* Allocate space for tracking the threads */
-    //pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsProducers); 
+    /* Consumers */
+    int     nThreadsConsumers = 1;
+    pthread_t * pThreadConsumers;
     pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers);
 
-    /* Start up our producer threads */
-    //for (int i = 0; i < nThreadsProducers; i++) {
-
-    // struct ThreadDataProduce * pThreadData;
-
-    // pThreadData = (struct ThreadDataProduce *) malloc(sizeof(struct ThreadDataProduce));
-    
-    // pThreadData->theInfo = &theInfo;
-    // pThreadData->ThreadID = i;
-
+    /* Start up producer thread */
     pthread_create(&pThreadProducer, 0, thread_producer, &theInfo);
-    pthread_join(pThreadProducer, 0);
-    //}
 
-    //printf("%d\n", StackSize);
-
-    // for (int i = 0; i < nThreadsProducers; i++) {
-    //     pthread_join(pThreadProducers[i], 0);
-    // }
-
-    // while (StackSize > 0) {
-    //     int tasksLeft = nThreadsConsumers;
-    //     if (StackSize - tasksLeft < 0) {
-    //         tasksLeft = StackSize;
-    //     }
-
-    /* Start up our consumer threads */
+    /* Start up consumer threads */
     for (int i = 0; i < nThreadsConsumers; i++) {
         pthread_create(&pThreadConsumers[i], 0, thread_consumer, 0);
     }
+
+    /* Wait for producer to finish */
+    pthread_join(pThreadProducer, 0);
+
+    /* Signal to consumers that producers are done */
+    AllDone = 1;
+    pthread_cond_broadcast(&PopCond);
 
     /* Loop until the consumers are done */
     for (int i = 0; i < nThreadsConsumers; i++) {
         pthread_join(pThreadConsumers[i], 0);
     }
-    // }
 }
 
 int main (int argc, char *argv[])
@@ -162,12 +132,13 @@ int main (int argc, char *argv[])
         return -1;
     }
 
+    /* Locks */
+    pthread_mutex_init(&StackLock, 0);
+    pthread_mutex_init(&TableLock, 0);
+
     printf("MAIN: Initializing the table for redundancy extraction\n");
     initializeProcessing(DEFAULT_TABLE_SIZE);
     printf("MAIN: Initializing the table for redundancy extraction ... done\n");
-
-    pthread_mutex_init(&StackLock, 0);
-    pthread_mutex_init(&TableLock, 0);
 
     // if ends in pcap
         // call processPcapFile(argv[1])
@@ -212,8 +183,6 @@ int main (int argc, char *argv[])
     fPct = (float) gPacketHitBytes / (float) gPacketSeenBytes * 100.0;
 
     printf("  Total Duplicate Percent: %6.2f%%\n", fPct);
-
-    //getchar();
 
     return 0;
 }

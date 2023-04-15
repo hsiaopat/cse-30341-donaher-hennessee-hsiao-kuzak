@@ -21,6 +21,7 @@ pthread_cond_t PopCond;
 
 int StackSize = 0;
 char AllDone = 0;
+char DoneDone = 0;
 char KeepGoing = 1;
 struct Packet * StackItems[STACK_MAX_SIZE];
 
@@ -49,6 +50,7 @@ void * thread_consumer (void * pData)
 
             /* Ope, we're done! */
             if (StackSize == 0 && AllDone) {
+                DoneDone = 0;
                 pthread_mutex_unlock(&StackLock);
                 return NULL;
             }
@@ -103,7 +105,10 @@ void processPcapFile(char * theFile, int numThreads)
 
     /* Signal to consumers that producers are done */
     AllDone = 1;
-    pthread_cond_broadcast(&PopCond);
+    DoneDone = 1;
+    while (DoneDone) {
+        pthread_cond_broadcast(&PopCond);
+    }
 
     /* Loop until the consumers are done */
     for (int i = 0; i < nThreadsConsumers; i++) {

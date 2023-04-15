@@ -42,14 +42,13 @@ void * thread_consumer (void * pData)
 
         pthread_mutex_lock(&StackLock);
 
-        /* No packets to pop, must wait :( */
+        /* Stack is empty, must wait :( */
         while (StackSize <= 0) {
             
             pthread_cond_wait(&PopCond, &StackLock);
 
             /* Ope, we're done! */
             if (StackSize == 0 && AllDone) {
-                AllDone = 0;
                 pthread_mutex_unlock(&StackLock);
                 return NULL;
             }
@@ -73,7 +72,7 @@ void * thread_consumer (void * pData)
     return NULL;
 }
 
-void processPcapFile(char * theFile) 
+void processPcapFile(char * theFile, int numThreads) 
 {
     struct FilePcapInfo theInfo;
 
@@ -87,7 +86,7 @@ void processPcapFile(char * theFile)
     pthread_t pThreadProducer;
 
     /* Consumers */
-    int     nThreadsConsumers = 1;
+    int nThreadsConsumers = numThreads - 1;
     pthread_t * pThreadConsumers;
     pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers);
 
@@ -104,9 +103,7 @@ void processPcapFile(char * theFile)
 
     /* Signal to consumers that producers are done */
     AllDone = 1;
-    while (AllDone) {
-        pthread_cond_broadcast(&PopCond);
-    }
+    pthread_cond_broadcast(&PopCond);
 
     /* Loop until the consumers are done */
     for (int i = 0; i < nThreadsConsumers; i++) {
@@ -135,6 +132,34 @@ int main (int argc, char *argv[])
         return -1;
     }
 
+    /* Parse arguments */
+    char * inputFile = argv[1];
+
+    int numThreads = 2;
+    for (int i = 2; i < argc; i++) {
+
+        /* Number of threads */
+        if (strcmp(argv[i], "-threads") == 0) {
+
+            if (i+1 >= argc) {
+                printf("Error: value not specified after -threads\n");
+                return 0;
+            }
+            else {
+                numThreads = atoi(argv[++i]);
+                if (numThreads < 2 || numThreads > 8) {
+                    printf("Error: value for number of threads not within range (2-8)\n");
+                    return 0;
+                }
+            }
+        }
+        /* Unknown command */
+        else {
+            printf("Unknown command: %s\n", argv[i]);
+            return 0;
+        }
+    }
+
     /* Locks */
     pthread_mutex_init(&StackLock, 0);
     pthread_mutex_init(&TableLock, 0);
@@ -143,31 +168,32 @@ int main (int argc, char *argv[])
     initializeProcessing(DEFAULT_TABLE_SIZE);
     printf("MAIN: Initializing the table for redundancy extraction ... done\n");
 
-    // if ends in pcap
-        // call processPcapFile(argv[1])
-
-    // else
-    FILE *fp;
-    char buffer[100];
-
-    fp = fopen(argv[1], "r");
-    if (fp == NULL) {
-        printf("Unable to open file\n");
-        return 1;
+    if (strstr(inputFile, ".pcap")) {
+        processPcapFile(inputFile, numThreads);
     }
+    else {
+        FILE *fp;
+        char buffer[100];
 
-    /* read pcap files */
-    while(fgets(buffer, 100, fp)) {
+        fp = fopen(inputFile, "r");
+        if (fp == NULL) {
+            printf("Unable to open file\n");
+            return 1;
+        }
 
-        /* remove trailing newline */
-        int len = strlen(buffer);
-        buffer[len-1] = (buffer[len-1] == '\n') ? '\0' : buffer[len-1];
+        /* Read pcap files */
+        while(fgets(buffer, 100, fp)) {
 
-        /* execute producer/consumer code */
-        processPcapFile(buffer);
+            /* Remove trailing newline */
+            int len = strlen(buffer);
+            buffer[len-1] = (buffer[len-1] == '\n') ? '\0' : buffer[len-1];
+
+            /* Execute producer/consumer code */
+            processPcapFile(buffer, numThreads);
+        }
+
+        fclose(fp);
     }
-
-    fclose(fp);
 
     printf("Summarizing the processed entries\n");
     tallyProcessing();

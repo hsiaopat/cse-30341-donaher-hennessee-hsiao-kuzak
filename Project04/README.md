@@ -19,6 +19,7 @@ The goals of this project are:
 
 • To measure and experiment to maximize performance
 
+Try it out yourself!
 
 To run with a single data file:
 ```

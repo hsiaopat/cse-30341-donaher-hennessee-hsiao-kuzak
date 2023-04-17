@@ -10,10 +10,15 @@ The purpose of this project is to experiment with condition variables as well as
 tuning using pthreads with a shared object. In addition, you will need to be judicious with
 system resources so as not to overly consume all of the resources on the student machines.
 The goals of this project are:
+
 • To use condition variables in a producer / consumer arrangement
+
 • To improve overall performance / efficiency
+
 • To make judicious use of system resources
+
 • To measure and experiment to maximize performance
+
 
 To run with a single data file:
 ```

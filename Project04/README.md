@@ -8,12 +8,14 @@ Patrick Hsiao | phsiao@nd.edu
 
 To run with a single data file:
 ```
-./redextract ./data/yourfile.pcap [-threads N]
+>> make
+>> ./redextract ./data/yourfile.pcap [-threads N]
 ```
 
 To run with an input file:
 ```
-./redextract ./input/yourfile.txt [-threads N]
+>> make
+>> ./redextract ./input/yourfile.txt [-threads N]
 ```
 
 To test our program, we ran with ```input/BiggerFiles.txt``` as the input file, which contains 5 instances of ```data/Test.pcap```. We tested on ```student11.cse.nd.edu```. The results below reflect the processing of nearly 200,000 packets with the number of threads varying from 2 to 8. As a design choice, our program executes with 1 Producer thread and N-1 Consumer threads.

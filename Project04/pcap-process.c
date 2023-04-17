@@ -177,14 +177,12 @@ void processPacket (struct Packet * pPacket)
 
     /* Step 2: Do any packet payloads match up? */
 
-    /* INSERT HASHING HERE */
     int j;
     uint64_t hash;
 
     // Compute hash value for the payload
     spooky_hash128(pPacket->Data + PayloadOffset, pPacket->PayloadSize, &hash, &hash);
 
-    
     // Use hash value to index into table
     j = hash % BigTableSize;
 
@@ -224,20 +222,6 @@ void processPacket (struct Packet * pPacket)
         BigTable[j].ThePacket = pPacket;
         BigTable[j].HitCount = 0;
         BigTable[j].RedundantBytes = 0;
-    }
-    /* Did we search the entire table and find no matches? */
-    if(j == BigTableSize)
-    {
-        /* Kick out the "oldest" entry by saving its entry to the global counters and 
-           free up that packet allocation 
-         */
-        resetAndSaveEntry(BigTableNextToReplace);
-
-        /* Take ownership of the packet */
-        BigTable[BigTableNextToReplace].ThePacket = pPacket;
-
-        /* Rotate to the next one to replace */
-        BigTableNextToReplace = (BigTableNextToReplace+1) % BigTableSize;
     }
 
     /* All done */

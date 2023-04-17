@@ -140,7 +140,7 @@ int main (int argc, char *argv[])
     /* Parse arguments */
     char * inputFile = argv[1];
 
-    int numThreads = 2;
+    int numThreads = 7;
     for (int i = 2; i < argc; i++) {
 
         /* Number of threads */

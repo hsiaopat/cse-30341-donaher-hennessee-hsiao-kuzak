@@ -1,8 +1,6 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
-
 #include "spooky.h"
 #include "pcap-process.h"
 
@@ -22,8 +20,6 @@ uint64_t        gPacketHitBytes;
 struct PacketEntry *    BigTable; 
 int    BigTableSize;
 int    BigTableNextToReplace;
-
-
 
 void initializeProcessingStats ()
 {
@@ -181,7 +177,6 @@ void processPacket (struct Packet * pPacket)
 
     /* Step 2: Do any packet payloads match up? */
 
-    /* INSERT HASHING HERE */
     int j;
     uint64_t hash;
 
@@ -191,41 +186,33 @@ void processPacket (struct Packet * pPacket)
     // Use hash value to index into table
     j = hash % BigTableSize;
 
-
     if(BigTable[j].ThePacket != NULL)
     {
         int k;
 
         /* Are the sizes the same? */
-        if(BigTable[j].ThePacket->PayloadSize != pPacket->PayloadSize)
+        if(BigTable[j].ThePacket->PayloadSize == pPacket->PayloadSize)
         {
-            continue;
-        }
-
-        /* OK - same size - do the bytes match up? */
-        for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
-        {
-            if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
+            /* OK - same size - do the bytes match up? */
+            for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
             {
-                /* Nope - they are not the same */
-                break;
+                if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
+                {
+                    /* Nope - they are not the same */
+                    break;
+                }
             }
-        }
+            /* Did we not break out with a mismatch? */
+            if(k >= BigTable[j].ThePacket->PayloadSize)
+            {
+                /* Whoot, whoot - the payloads match up */
+                BigTable[j].HitCount++;
+                BigTable[j].RedundantBytes += pPacket->PayloadSize;
 
-        /* Did we break out with a mismatch? */
-        if(k < BigTable[j].ThePacket->PayloadSize)
-        {
-            continue;
-        }
-        else 
-        {
-            /* Whoot, whoot - the payloads match up */
-            BigTable[j].HitCount++;
-            BigTable[j].RedundantBytes += pPacket->PayloadSize;
-
-            /* The packets match so get rid of the matching one */
-            discardPacket(pPacket);
-            return;
+                /* The packets match so get rid of the matching one */
+                discardPacket(pPacket);
+                return;
+            }
         }
     }
     else 
@@ -235,23 +222,6 @@ void processPacket (struct Packet * pPacket)
         BigTable[j].ThePacket = pPacket;
         BigTable[j].HitCount = 0;
         BigTable[j].RedundantBytes = 0;
-        break;
-    }
-    
-
-    /* Did we search the entire table and find no matches? */
-    if(j == BigTableSize)
-    {
-        /* Kick out the "oldest" entry by saving its entry to the global counters and 
-           free up that packet allocation 
-         */
-        resetAndSaveEntry(BigTableNextToReplace);
-
-        /* Take ownership of the packet */
-        BigTable[BigTableNextToReplace].ThePacket = pPacket;
-
-        /* Rotate to the next one to replace */
-        BigTableNextToReplace = (BigTableNextToReplace+1) % BigTableSize;
     }
 
     /* All done */
@@ -264,8 +234,3 @@ void tallyProcessing ()
         resetAndSaveEntry(j);
     }
 }
-
-
-
-
-

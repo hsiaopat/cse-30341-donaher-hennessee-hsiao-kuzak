@@ -336,16 +336,14 @@ spooky_short(const void *restrict message, size_t length,
 	*hash2 = h[1];
 }
 
-uint64_t
-spooky_hash64(const void *message, size_t length, uint64_t seed)
+uint64_t spooky_hash64(const void *message, size_t length, uint64_t seed)
 {
 	uint64_t hash1 = seed;
 	spooky_hash128(message, length, &hash1, &seed);
 	return hash1;
 }
 
-uint32_t
-spooky_hash32(const void *message, size_t length, uint32_t seed)
+uint32_t spooky_hash32(const void *message, size_t length, uint32_t seed)
 {
 	uint64_t hash1 = seed, hash2 = seed;
 	spooky_hash128(message, length, &hash1, &hash2);
@@ -416,8 +414,7 @@ spooky_init(struct spooky_state *state, uint64_t seed1, uint64_t seed2)
 }
 
 // add a message fragment to the state
-void
-spooky_update(struct spooky_state *restrict state,
+void spooky_update(struct spooky_state *restrict state,
               const void *restrict message, size_t length)
 {
 	uint64_t h[SC_NUMVARS];
@@ -489,8 +486,7 @@ spooky_update(struct spooky_state *restrict state,
 
 // report the hash for the concatenation of all message fragments so far
 void
-spooky_final(struct spooky_state *restrict state,
-             uint64_t *restrict hash1, uint64_t *restrict hash2)
+spooky_final(struct spooky_state *restrict state,uint64_t *restrict hash1, uint64_t *restrict hash2)
 {
 	// init the variables
 	if (state->length < SC_BUFSIZE) {

@@ -1,5 +1,3 @@
-
-
 #ifndef __PCAP_PROCESS_H
 #define __PCAP_PROCESS_H
 

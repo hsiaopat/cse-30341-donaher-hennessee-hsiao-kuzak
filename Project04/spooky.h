@@ -65,23 +65,17 @@ struct spooky_state {
 	uint8_t left;                  // length of unhashed data stashed in data
 };
 
-void
-spooky_hash128(const void *message, size_t length, uint64_t *hash1, uint64_t *hash2);
+void spooky_hash128(const void *message, size_t length, uint64_t *hash1, uint64_t *hash2);
 
-uint64_t
-spooky_hash64(const void *message, size_t length, uint64_t seed);
+uint64_t spooky_hash64(const void *message, size_t length, uint64_t seed);
 
-uint32_t
-spooky_hash32(const void *message, size_t length, uint32_t seed);
+uint32_t spooky_hash32(const void *message, size_t length, uint32_t seed);
 
-void
-spooky_init(struct spooky_state *state, uint64_t seed1, uint64_t seed2);
+void spooky_init(struct spooky_state *state, uint64_t seed1, uint64_t seed2);
 
-void
-spooky_update(struct spooky_state *state, const void *message, size_t length);
+void spooky_update(struct spooky_state *state, const void *message, size_t length);
 
-void
-spooky_final(struct spooky_state *state, uint64_t *hash1, uint64_t *hash2);
+void spooky_final(struct spooky_state *state, uint64_t *hash1, uint64_t *hash2);
 
 #ifdef __cplusplus
 } /* extern "C" */

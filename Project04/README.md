@@ -47,22 +47,26 @@ To test our program, we ran with ```input/BiggerFiles.txt``` as the input file, 
 
 Based on our results, we set the default number of threads to 7 (1 Producer and 6 Consumers).
 
-We ran these commands on all different input files and these are the results we got:
-| Files |  |
-| :---: | :---: | 
-| singleTest.txt | Parsing of file ./input/singleTest.txt complete
+Below are the results for the processing of individual tcpdump files:
+
+| singleTest.txt |
+| :---: |
   Total Packets Parsed:    430
   Total Bytes   Parsed:    441321
   Total Packets Duplicate: 0
   Total Bytes   Duplicate: 0
   Total Duplicate Percent:   0.00% | 
-| doubleTest.txt | Parsing of file ./input/doubleTest.txt complete
+
+| doubleTest.txt |
+| :---: | 
   Total Packets Parsed:    860
   Total Bytes   Parsed:    882642
   Total Packets Duplicate: 227
   Total Bytes   Duplicate: 305221
-  Total Duplicate Percent:  34.58% | 
-| biggerFiles.txt | Parsing of file ./input/biggerFiles.txt complete
+  Total Duplicate Percent:  34.58% |
+
+| biggerFiles.txt |
+| :---: | 
   Total Packets Parsed:    32424
   Total Bytes   Parsed:    31187142
   Total Packets Duplicate: 1024

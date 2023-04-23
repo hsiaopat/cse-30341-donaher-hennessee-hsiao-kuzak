@@ -84,17 +84,20 @@ void fs_debug()
                 printf("\n");
 
                 if (inode->indirect != 0) {
-
                     printf("    indirect block: %d\n", inode->indirect);
                     printf("    indirect data blocks:");
 
+                    union fs_block indirect_block;
+                    disk_read(inode->indirect, indirect_block.data);
+
                     for (int k = 0; k < POINTERS_PER_BLOCK; k++) {
-                        if (next_block.pointers[k] != 0) {
-                            printf(" %d", next_block.pointers[k]);
+                        if (indirect_block.pointers[k] != 0) {
+                        printf(" %d", indirect_block.pointers[k]);
                         }
                     }
                     printf("\n");
                 }
+
             }
         }
     }

@@ -226,4 +226,3 @@ static int do_copyout( int inumber, const char *filename )
 	fclose(file);
 	return 1;
 }
-

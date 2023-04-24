@@ -46,12 +46,19 @@ void fs_debug()
     // Read superblock from disk
     disk_read(0, block.data);
 
+    // error checking: 
     // Validate magic number
     if (block.super.magic != FS_MAGIC) {
         printf("ERROR: Invalid magic number in superblock.\n");
         return;
     }
-
+    
+    //check disk block size and super block size match up 
+    if (disk_size() != block.super.nblocks) {
+        printf("ERROR: Disk block size does not matchsuperblock.\n");
+        return;
+    }
+    
     printf("superblock:\n");
     printf("    %d blocks\n", block.super.nblocks);
     printf("    %d inode blocks\n", block.super.ninodeblocks);
@@ -78,12 +85,23 @@ void fs_debug()
 
                 for (int k = 0; k < POINTERS_PER_INODE; k++) {
                     if (inode->direct[k] != 0) {
+                        // checking that the directblocks are in range 
+                        if (inode->direct[k] < 1 || inode->direct[k] >= disk_size()) {
+                            fprintf(stderr, "ERROR: Direct block out of range.\n");
+                            return;
+                        }
+
                         printf(" %d", inode->direct[k]);
                     }
                 }
                 printf("\n");
 
                 if (inode->indirect != 0) {
+                    //checking that the indirect blocks are in range 
+                    if (inode->indirect < 1 || inode->indirect >= disk_size()) {
+                        fprintf(stderr, "ERROR: Indirect block out of range.\n");
+                        return;
+                    }
 
                     printf("    indirect block: %d\n", inode->indirect);
                     printf("    indirect data blocks:");

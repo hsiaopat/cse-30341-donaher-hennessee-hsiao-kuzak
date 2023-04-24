@@ -8,7 +8,8 @@
 #include <errno.h>
 #include <unistd.h>
 
-#define FS_MAGIC           0xf0f03410
+// #define FS_MAGIC           0xf0f03410 // for 5, 20, 200
+#define FS_MAGIC           0x30341003 // for 10, 25, 100
 #define INODES_PER_BLOCK   128
 #define POINTERS_PER_INODE 5
 #define POINTERS_PER_BLOCK 1024
@@ -41,9 +42,8 @@ int fs_format()
 
 void fs_debug()
 {
-	union fs_block block;
-
     // Read superblock from disk
+    union fs_block block;
     disk_read(0, block.data);
 
     // Validate magic number
@@ -52,30 +52,34 @@ void fs_debug()
         return;
     }
 
+    // Display superblock info
     printf("superblock:\n");
     printf("    %d blocks\n", block.super.nblocks);
     printf("    %d inode blocks\n", block.super.ninodeblocks);
     printf("    %d inodes\n", block.super.ninodes);
 
-    // Iterate through all inode blocks and print information about each inode
-    int inode_blocks = block.super.ninodeblocks;
-
-    for (int i = 1; i <= inode_blocks; i++) {
-
+    // Loop over inode blocks
+    for (int i = 1; i <= block.super.ninodeblocks; i++) {
+        
+        // Read current inode block from disk
 		union fs_block next_block;
         disk_read(i, next_block.data);
 
+        // Loop over all inodes in a block
         for (int j = 0; j < INODES_PER_BLOCK; j++) {
 
             struct fs_inode * inode = &next_block.inode[j];
             int inumber = ((i - 1) * INODES_PER_BLOCK) + j;
 
+            // Check if inode is valid
             if (inode->isvalid) {
-			
+                
+                // Display inode info
                 printf("inode %d:\n", inumber);
                 printf("    size: %d bytes\n", inode->size);
-                printf("    direct blocks:");
 
+                // Loop over direct pointers in inode
+                printf("    direct blocks:");
                 for (int k = 0; k < POINTERS_PER_INODE; k++) {
                     if (inode->direct[k] != 0) {
                         printf(" %d", inode->direct[k]);
@@ -83,21 +87,23 @@ void fs_debug()
                 }
                 printf("\n");
 
+                // Check if indirect pointer is valid
                 if (inode->indirect != 0) {
-                    printf("    indirect block: %d\n", inode->indirect);
-                    printf("    indirect data blocks:");
-
+                    
+                    // Read indirect block from disk
                     union fs_block indirect_block;
                     disk_read(inode->indirect, indirect_block.data);
 
+                    // Loop over pointers in indirect block
+                    printf("    indirect block: %d\n", inode->indirect);
+                    printf("    indirect data blocks:");
                     for (int k = 0; k < POINTERS_PER_BLOCK; k++) {
                         if (indirect_block.pointers[k] != 0) {
-                        printf(" %d", indirect_block.pointers[k]);
+                            printf(" %d", indirect_block.pointers[k]);
                         }
                     }
                     printf("\n");
                 }
-
             }
         }
     }

@@ -8,8 +8,8 @@
 #include <errno.h>
 #include <unistd.h>
 
-// #define FS_MAGIC           0xf0f03410 // for 5, 20, 200
-#define FS_MAGIC           0x30341003 // for 10, 25, 100
+#define FS_MAGIC           0xf0f03410 // for 5, 20, 200
+// #define FS_MAGIC           0x30341003 // for 10, 25, 100
 #define INODES_PER_BLOCK   128
 #define POINTERS_PER_INODE 5
 #define POINTERS_PER_BLOCK 1024
@@ -52,7 +52,7 @@ void fs_debug()
         return;
     }
 
-    // checking the disk block size 
+    // Checking the disk block size 
     if (disk_size() != block.super.nblocks) {
         printf("ERROR: Disk block size does not match superblock.\n");
         return;
@@ -87,12 +87,14 @@ void fs_debug()
                 // Loop over direct pointers in inode
                 printf("    direct blocks:");
                 for (int k = 0; k < POINTERS_PER_INODE; k++) {
+                    
                     if (inode->direct[k] != 0) {
-                        //check if the direct block is in range 
-                        if (inode->direct[k] < 1 || inode->direct[k] >= disk_size()) {
-                            printf("ERROR: Direct block out of range.\n");
-                            return;
+
+                        // Out of range
+                        if (inode->direct[k] < 1 || inode->direct[k] >= disk_size()) {    
+                            continue;
                         }
+
                         printf(" %d", inode->direct[k]);
                     }
                 }
@@ -100,10 +102,10 @@ void fs_debug()
 
                 // Check if indirect pointer is valid
                 if (inode->indirect != 0) {
-                     //check that the indirect block is in range 
+
+                    // Out of range
                     if (inode->indirect < 1 || inode->indirect >= disk_size()) {
-                        printf("ERROR: Indirect block out of range.\n");
-                        return;
+                        continue;
                     }
 
                     // Read indirect block from disk
@@ -114,12 +116,14 @@ void fs_debug()
                     printf("    indirect block: %d\n", inode->indirect);
                     printf("    indirect data blocks:");
                     for (int k = 0; k < POINTERS_PER_BLOCK; k++) {
+                        
                         if (indirect_block.pointers[k] != 0) {
-                            //check that the indirect block is in range 
+                            
+                            // Out of range
                             if (indirect_block.pointers[k] < 1 || indirect_block.pointers[k] >= disk_size()) {
-                                printf("ERROR: Indirect block out of range.\n");
-                                return;
+                                continue;
                             }
+
                             printf(" %d", indirect_block.pointers[k]);
                         }
                     }

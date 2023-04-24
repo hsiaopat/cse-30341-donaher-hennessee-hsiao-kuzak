@@ -52,6 +52,12 @@ void fs_debug()
         return;
     }
 
+    // checking the disk block size 
+    if (disk_size() != block.super.nblocks) {
+        printf("ERROR: Disk block size does not match superblock.\n");
+        return;
+    }
+
     // Display superblock info
     printf("superblock:\n");
     printf("    %d blocks\n", block.super.nblocks);
@@ -82,6 +88,11 @@ void fs_debug()
                 printf("    direct blocks:");
                 for (int k = 0; k < POINTERS_PER_INODE; k++) {
                     if (inode->direct[k] != 0) {
+                        //check if the direct block is in range 
+                        if (inode->direct[k] < 1 || inode->direct[k] >= disk_size()) {
+                            printf("ERROR: Direct block out of range.\n");
+                            return;
+                        }
                         printf(" %d", inode->direct[k]);
                     }
                 }
@@ -89,7 +100,12 @@ void fs_debug()
 
                 // Check if indirect pointer is valid
                 if (inode->indirect != 0) {
-                    
+                     //check that the indirect block is in range 
+                    if (inode->indirect < 1 || inode->indirect >= disk_size()) {
+                        printf("ERROR: Indirect block out of range.\n");
+                        return;
+                    }
+
                     // Read indirect block from disk
                     union fs_block indirect_block;
                     disk_read(inode->indirect, indirect_block.data);
@@ -99,6 +115,11 @@ void fs_debug()
                     printf("    indirect data blocks:");
                     for (int k = 0; k < POINTERS_PER_BLOCK; k++) {
                         if (indirect_block.pointers[k] != 0) {
+                            //check that the indirect block is in range 
+                            if (indirect_block.pointers[k] < 1 || indirect_block.pointers[k] >= disk_size()) {
+                                printf("ERROR: Indirect block out of range.\n");
+                                return;
+                            }
                             printf(" %d", indirect_block.pointers[k]);
                         }
                     }

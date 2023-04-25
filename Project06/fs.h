@@ -19,8 +19,8 @@
 
 /* Definitions for the file itself */
 
-// #define FS_MAGIC           0x30341003 // for 10, 25, 100
-#define FS_MAGIC           0xf0f03410 // for 5, 20, 200
+#define FS_MAGIC           0x30341003 // for 10, 25, 100
+// #define FS_MAGIC           0xf0f03410 // for 5, 20, 200
 #define INODES_PER_BLOCK   128
 #define POINTERS_PER_INODE 3
 #define POINTERS_PER_BLOCK 1024

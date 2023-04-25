@@ -63,25 +63,14 @@ void fs_debug()
                 // Loop over direct pointers in inode
                 printf("    direct blocks:");
                 for (int k = 0; k < POINTERS_PER_INODE; k++) {
-                    
-                    if (inode->direct[k] != 0) {
-
-                        // Check bounds
-                        if (inode->direct[k] > 0 && inode->direct[k] < disk_size()) {    
-                            
-                            printf(" %d", inode->direct[k]);
-                        }
+                    if (inode->direct[k] > 0 && inode->direct[k] < disk_size()) {    
+                        printf(" %d", inode->direct[k]);
                     }
-                }
+                }   
                 printf("\n");
 
                 // Check if indirect pointer is valid
-                if (inode->indirect != 0) {
-
-                    // Out of range
-                    if (inode->indirect < 1 || inode->indirect >= disk_size()) {
-                        continue;
-                    }
+                if (inode->indirect > 0 && inode->indirect < disk_size()) {
 
                     // Read indirect block from disk
                     union fs_block indirect_block;
@@ -91,14 +80,8 @@ void fs_debug()
                     printf("    indirect block: %d\n", inode->indirect);
                     printf("    indirect data blocks:");
                     for (int k = 0; k < POINTERS_PER_BLOCK; k++) {
-                        
-                        if (indirect_block.pointers[k] != 0) {
-                            
-                            // Check bounds
-                            if (indirect_block.pointers[k] > 0 && indirect_block.pointers[k] < disk_size()) {
-                                
-                                printf(" %d", indirect_block.pointers[k]);
-                            }
+                        if (indirect_block.pointers[k] > 0 && indirect_block.pointers[k] < disk_size()) {
+                            printf(" %d", indirect_block.pointers[k]);
                         }
                     }
                     printf("\n");

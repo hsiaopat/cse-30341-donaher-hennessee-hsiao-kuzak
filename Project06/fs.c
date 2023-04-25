@@ -1,39 +1,15 @@
+/*
+Implementation of SimpleFS.
+Make your changes here.
+*/
 
 #include "fs.h"
 #include "disk.h"
 
 #include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <unistd.h>
+#include <stdint.h>
 
-#define FS_MAGIC           0xf0f03410 // for 5, 20, 200
-// #define FS_MAGIC           0x30341003 // for 10, 25, 100
-#define INODES_PER_BLOCK   128
-#define POINTERS_PER_INODE 5
-#define POINTERS_PER_BLOCK 1024
-
-struct fs_superblock {
-	int magic;
-	int nblocks;
-	int ninodeblocks;
-	int ninodes;
-};
-
-struct fs_inode {
-	int isvalid;
-	int size;
-	int direct[POINTERS_PER_INODE];
-	int indirect;
-};
-
-union fs_block {
-	struct fs_superblock super;
-	struct fs_inode inode[INODES_PER_BLOCK];
-	int pointers[POINTERS_PER_BLOCK];
-	char data[DISK_BLOCK_SIZE];
-};
+extern struct disk *thedisk;
 
 int fs_format()
 {
@@ -44,7 +20,7 @@ void fs_debug()
 {
     // Read superblock from disk
     union fs_block block;
-    disk_read(0, block.data);
+    disk_read(thedisk, 0, block.data);
 
     // Validate magic number
     if (block.super.magic != FS_MAGIC) {
@@ -69,7 +45,7 @@ void fs_debug()
         
         // Read current inode block from disk
 		union fs_block next_block;
-        disk_read(i, next_block.data);
+        disk_read(thedisk, i, next_block.data);
 
         // Loop over all inodes in a block
         for (int j = 0; j < INODES_PER_BLOCK; j++) {
@@ -90,12 +66,11 @@ void fs_debug()
                     
                     if (inode->direct[k] != 0) {
 
-                        // Out of range
-                        if (inode->direct[k] < 1 || inode->direct[k] >= disk_size()) {    
-                            continue;
+                        // Check bounds
+                        if (inode->direct[k] > 0 && inode->direct[k] < disk_size()) {    
+                            
+                            printf(" %d", inode->direct[k]);
                         }
-
-                        printf(" %d", inode->direct[k]);
                     }
                 }
                 printf("\n");
@@ -110,7 +85,7 @@ void fs_debug()
 
                     // Read indirect block from disk
                     union fs_block indirect_block;
-                    disk_read(inode->indirect, indirect_block.data);
+                    disk_read(thedisk, inode->indirect, indirect_block.data);
 
                     // Loop over pointers in indirect block
                     printf("    indirect block: %d\n", inode->indirect);
@@ -119,12 +94,11 @@ void fs_debug()
                         
                         if (indirect_block.pointers[k] != 0) {
                             
-                            // Out of range
-                            if (indirect_block.pointers[k] < 1 || indirect_block.pointers[k] >= disk_size()) {
-                                continue;
+                            // Check bounds
+                            if (indirect_block.pointers[k] > 0 && indirect_block.pointers[k] < disk_size()) {
+                                
+                                printf(" %d", indirect_block.pointers[k]);
                             }
-
-                            printf(" %d", indirect_block.pointers[k]);
                         }
                     }
                     printf("\n");

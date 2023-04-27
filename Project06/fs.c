@@ -94,7 +94,111 @@ void fs_debug()
 
 int fs_mount()
 {
-	return 0;
+    // Read superblock from disk
+    union fs_block block;
+    disk_read(thedisk, 0, block.data);
+
+    // Validate magic number
+    if (block.super.magic != FS_MAGIC) {
+        printf("ERROR: Invalid magic number in superblock.\n");
+        return 0;
+    }
+
+    // Checking the disk block size 
+    if (disk_size() != block.super.nblocks) {
+        printf("ERROR: Disk block size does not match superblock.\n");
+        return 0;
+    }
+
+    // Build free block bitmap
+    int bitmap_size = block.super.nblocks / 8;
+    if (block.super.nblocks % 8 > 0) {
+        bitmap_size++;
+    }
+    unsigned char bitmap[bitmap_size];
+    for (int i = 0; i < bitmap_size; i++) {
+        bitmap[i] = 0;
+    }
+
+
+
+    for (int i = 0; i < block.super.ninodeblocks + 1; i++) {
+        if (i == 0) {
+            // Skip first block (superblock)
+            continue;
+        }
+
+        union fs_block next_block;
+        disk_read(thedisk, i, next_block.data);
+        for (int j = 0; j < POINTERS_PER_BLOCK; j++) {
+            int block_num = next_block.pointers[j];
+            if (block_num == 0) {
+                // End of inode blocks
+                break;
+            }
+            if (block_num < 0 || block_num >= block.super.nblocks) {
+                // Invalid block number
+                printf("ERROR: Invalid block number %d in inode block %d\n", block_num, i);
+                return 0;
+            }
+            int byte_num = block_num / 8;
+            int bit_num = block_num % 8;
+            bitmap[byte_num] |= (1 << bit_num); //sets specific bit to 1
+        }
+    }
+
+
+    // Loop over inode blocks
+    for (int i = 1; i <= block.super.ninodeblocks; i++) {
+        
+        // Read current inode block from disk
+		union fs_block next_block;
+        disk_read(thedisk, i, next_block.data);
+
+        // Loop over all inodes in a block
+        for (int j = 0; j < INODES_PER_BLOCK; j++) {
+
+            struct fs_inode * inode = &next_block.inode[j];
+            int inumber = ((i - 1) * INODES_PER_BLOCK) + j;
+
+            // Check if inode is valid
+            if (inode->isvalid) {
+
+                // Display inode info
+                printf("inode %d:\n", inumber);
+                printf("    size: %d bytes\n", inode->size);
+
+                // Loop over direct pointers in inode
+                printf("    direct blocks:");
+                for (int k = 0; k < POINTERS_PER_INODE; k++) {
+                    if (inode->direct[k] > 0 && inode->direct[k] < disk_size()) {    
+                        printf(" %d", inode->direct[k]);
+                        block.used_blocks[inode->direct[k]] = 1; // Mark block as used
+                    }
+                }   
+                printf("\n");
+
+                // Check if indirect pointer is valid
+                if (inode->indirect > 0 && inode->indirect < disk_size()) {
+
+                    // Read indirect block from disk
+                    union fs_block indirect_block;
+                    disk_read(thedisk, inode->indirect, indirect_block.data);
+
+                    // Loop over pointers in indirect block
+                    printf("    indirect block: %d\n", inode->indirect);
+                    printf("    indirect data blocks:");
+                    for (int k = 0; k < POINTERS_PER_BLOCK; k++) {
+                        if (indirect_block.pointers[k] > 0 && indirect_block.pointers[k] < disk_size()) {
+                            printf(" %d", indirect_block.pointers[k]);
+                            block.used_blocks[indirect_block.pointers[k]] = 1; // Mark block as used
+                        }
+                    }
+                    printf("\n");
+                }
+            }
+        }
+    }
 }
 
 int fs_create()

@@ -13,8 +13,33 @@ extern struct disk *thedisk;
 
 int fs_format()
 {
-    
-	return 0;
+    // FIXME: how do we check if the disk is already mounted?
+
+    // Write superblock
+    union fs_block block;
+    block.super.magic = FS_MAGIC;
+    block.super.nblocks = disk_size();
+
+    // Set aside 10% of blocks for inodes
+    block.super.ninodeblocks = block.super.nblocks / 10;
+    if (block.super.nblocks % 10 > 0) {
+        block.super.ninodeblocks++;
+    }
+
+    // Write number of inodes
+    block.super.ninodes = block.super.ninodeblocks * INODES_PER_BLOCK;
+
+    // Clear blocks, initialize to 0
+    union fs_block next_block;
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        next_block.data[i] = 0;
+    }
+
+    for (int i = 1; i < block.super.nblocks; i++) {
+        disk_write(thedisk, i, next_block.data);
+    }
+
+    return 1;
 }
 
 void fs_debug()

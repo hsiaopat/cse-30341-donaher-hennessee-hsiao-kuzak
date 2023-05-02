@@ -9,6 +9,7 @@ Make your changes here.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 extern struct disk * thedisk;
 int * bitmap;
@@ -313,11 +314,74 @@ int fs_getsize( int inumber )
     }
 
     // Return size of inode
-	return block.inode[ioffset].size;
+    return block.inode[ioffset].size;
 }
 
 int fs_read( int inumber, char *data, int length, int offset )
 {
+    size_t bytes_read = 0;
+
+    // Load inode
+    size_t iblock = inumber/INODES_PER_BLOCK + 1;
+    size_t ioffset = inumber % INODES_PER_BLOCK;
+
+    union fs_block block;
+    disk_read(thedisk, iblock, block.data);
+
+    if (block.inode[ioffset].isvalid == 0) {
+        return 0;
+    }
+
+    // Calculate logical block
+    size_t logical_block = offset / BLOCK_SIZE;
+    size_t next_block_offset = offset % BLOCK_SIZE;
+
+    // Truncate length to read if larger than inode size
+    if (length + offset > block.inode[ioffset].size) {
+        length = block.inode[ioffset].size - offset;
+    }
+
+    // Calculate length to read from each inode
+    size_t to_read;
+    if (length + next_block_offset < BLOCK_SIZE) {
+        to_read = length;
+    }
+    else {
+        to_read = BLOCK_SIZE - next_block_offset;
+    }
+
+    // Read blocks
+    while (bytes_read < length && logical_block < POINTERS_PER_BLOCK + POINTERS_PER_INODE) {
+        
+        // If direct...
+        if (logical_block < POINTERS_PER_INODE) {
+
+            // Read direct block
+            union fs_block direct_block;
+            disk_read(thedisk, block.inode[ioffset].direct[logical_block], direct_block.data);
+
+            // Copy to data buffer
+            memcpy(data + bytes_read, direct_block.data + next_block_offset, to_read);
+            bytes_read += to_read;
+        }
+
+        // If indirect...
+        else {
+
+            // Read indirect block
+            union fs_block indirect_block;
+            disk_read(thedisk, block.inode[ioffset].indirect, indirect_block.data);
+
+            // Read pointers
+            union fs_block next_block;
+            disk_read(thedisk, indirect_block.pointers[logical_block - POINTERS_PER_INODE], next_block.data);
+
+            // Copy to data buffer
+            memcpy(data + bytes_read, next_block.data + next_block_offset, to_read);
+            bytes_read += to_read;
+        }
+    }
+    
 	return 0;
 }
 

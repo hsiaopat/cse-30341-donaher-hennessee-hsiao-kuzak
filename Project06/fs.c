@@ -77,7 +77,7 @@ void fs_debug()
         for (int j = 0; j < INODES_PER_BLOCK; j++) {
 
             struct fs_inode * inode = &next_block.inode[j];
-            int inumber = ((i - 1) * INODES_PER_BLOCK) + j;
+            int inumber = ((i-1) * INODES_PER_BLOCK) + j;
 
             // Check if inode is valid
             if (inode->isvalid) {
@@ -197,6 +197,38 @@ int fs_mount()
 
 int fs_create()
 {
+    // Read inode blocks
+    union fs_block block;
+    disk_read(thedisk, 0, block.data);
+
+    // Loop over inode blocks
+    for (int i = 1; i <= block.super.ninodeblocks; i++) {
+        
+        union fs_block next_block;
+        disk_read(thedisk, i, next_block.data);
+
+        // Loop over inodes in block, search for free inode
+        for (int j = 1; j < INODES_PER_BLOCK; j++) {
+
+            // Initialize and return inumber
+            if (next_block.inode[j].isvalid == 0) {
+                
+                next_block.inode[j].isvalid = 1;
+                next_block.inode[j].size = 0;
+
+                for (int k = 0; k < POINTERS_PER_INODE; k++) {
+                    next_block.inode[j].direct[k] = 0;
+                }
+
+                next_block.inode[j].indirect = 0;
+
+                disk_write(thedisk, i, next_block.data);
+
+                return ((i-1) * INODES_PER_BLOCK) + j;
+            }
+        }
+    }
+
 	return 0;
 }
 

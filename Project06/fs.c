@@ -271,9 +271,11 @@ int fs_delete( int inumber )
     // Relase indirect pointers
     if (block.inode[ioffset].indirect > 0 && block.inode[ioffset].indirect < disk_size()) {
         
+        // Read indirect block
         union fs_block next_block;
         disk_read(thedisk, block.inode[ioffset].indirect, next_block.data);
 
+        // Loop over pointers in indirect block, update bitmap
         for (int i = 0; i < POINTERS_PER_BLOCK; i++) {
             
             if (next_block.pointers[i] > 0 && next_block.pointers[i] < disk_size()) {
@@ -283,6 +285,7 @@ int fs_delete( int inumber )
             next_block.pointers[i] = 0;
         }
 
+        // Update bitmap
         bitmap[block.inode[ioffset].indirect] = 0;
         block.inode[ioffset].indirect = 0;
     }

@@ -301,7 +301,19 @@ int fs_delete( int inumber )
 
 int fs_getsize( int inumber )
 {
-	return -1;
+    // Read inode block
+    size_t iblock = inumber/INODES_PER_BLOCK + 1;
+    size_t ioffset = inumber % INODES_PER_BLOCK;
+
+    union fs_block block;
+    disk_read(thedisk, iblock, block.data);
+
+    if (block.inode[ioffset].isvalid == 0) {
+        return -1;
+    }
+
+    // Return size of inode
+	return block.inode[ioffset].size;
 }
 
 int fs_read( int inumber, char *data, int length, int offset )

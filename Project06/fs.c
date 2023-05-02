@@ -7,9 +7,11 @@ Make your changes here.
 #include "disk.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 
-extern struct disk *thedisk;
+extern struct disk * thedisk;
+int * bitmap;
 
 int fs_format()
 {
@@ -142,11 +144,16 @@ int fs_mount()
     // }
 
     // Initialize bitmap
-    int bitmap[block.super.nblocks];
+    bitmap = calloc(block.super.nblocks, sizeof(int));
     for (int i = 0; i < block.super.nblocks; i++) {
         bitmap[i] = 0; // 0 ~ unused block
     }
     bitmap[0] = 1; // 1 ~ used block
+
+    printf("BEFORE\n");
+    for (int i = 0; i < block.super.nblocks; i++) {
+        printf("%d\n", bitmap[i]);
+    }
 
     // Loop over inode blocks
     for (int i = 1; i <= block.super.ninodeblocks; i++) {
@@ -192,6 +199,11 @@ int fs_mount()
         }
     }
 
+    printf("AFTER\n");
+    for (int i = 0; i < block.super.nblocks; i++) {
+        printf("%d\n", bitmap[i]);
+    }
+
     return 1;
 }
 
@@ -229,77 +241,59 @@ int fs_create()
         }
     }
 
-	return 0;
+    return 0;
 }
 
 int fs_delete( int inumber )
 {
-    // // Read superblock from disk
-    // union fs_block super_block;
-    // disk_read(thedisk, 0, super_block.data);
+    // Read inode block
+    size_t iblock = inumber/INODES_PER_BLOCK + 1;
+    size_t ioffset = inumber % INODES_PER_BLOCK;
+    
+    union fs_block block;
+    disk_read(thedisk, iblock, block.data);
+    
+    if (block.inode[ioffset].isvalid == 0) {
+        return 0;
+    }
 
-    // // Check if disk is mounted
-    // if (disk->is_mounted) { //DOES NOT WORK IS MOUNTED IS NOT A THING CAN WE ADD IT?
-    //     printf("ERROR: Disk is not mounted.\n");
-    //     return 0;
-    // }
+    // Release direct blocks
+    for (int i = 0; i < POINTERS_PER_INODE; i++) {
 
-    // // Check if inumber is valid
-    // if (inumber <= 0 || inumber >= super_block.super.ninodes) {
-    //     printf("ERROR: Invalid inode number.\n");
-    //     return 0;
-    // }
+        // Update bitmap
+        if (block.inode[ioffset].direct[i] > 0 && block.inode[ioffset].direct[i] < disk_size()) {
+            bitmap[block.inode[ioffset].direct[i]] = 0;
+        }
 
-    // // Read inode from disk
-    // int inode_block_index = (inumber - 1) / INODES_PER_BLOCK + 1;
-    // int inode_index_within_block = (inumber - 1) % INODES_PER_BLOCK;
-    // union fs_block inode_block;
-    // disk_read(thedisk, inode_block_index, inode_block.data);
-    // struct fs_inode* inode = &inode_block.inode[inode_index_within_block];
+        block.inode[ioffset].direct[i] = 0;
+    }
 
-    // // Check if inode is valid
-    // if (!inode->isvalid) {
-    //     printf("ERROR: Inode does not exist.\n");
-    //     return 0;
-    // }
+    // Relase indirect pointers
+    if (block.inode[ioffset].indirect > 0 && block.inode[ioffset].indirect < disk_size()) {
+        
+        union fs_block next_block;
+        disk_read(thedisk, block.inode[ioffset].indirect, next_block.data);
 
-    // // Free direct blocks
-    // for (int i = 0; i < POINTERS_PER_INODE; i++) {
-    //     if (inode->direct[i] != 0) {
-    //         disk_set_block(inode->direct[i], 0);
-    //         inode->direct[i] = 0;
-    //     }
-    // }
+        for (int i = 0; i < POINTERS_PER_BLOCK; i++) {
+            
+            if (next_block.pointers[i] > 0 && next_block.pointers[i] < disk_size()) {
+                bitmap[next_block.pointers[i]] = 0;
+            }
 
-    // // Free indirect blocks
-    // if (inode->indirect != 0) {
-    //     union fs_block indirect_block;
-    //     disk_read(thedisk, inode->indirect, indirect_block.data);
-    //     for (int i = 0; i < POINTERS_PER_BLOCK; i++) {
-    //         if (indirect_block.pointers[i] != 0) {
-    //             disk_set_block(indirect_block.pointers[i], 0);
-    //             indirect_block.pointers[i] = 0;
-    //         }
-    //     }
-    //     disk_set_block(inode->indirect, 0);
-    //     inode->indirect = 0;
-    // }
+            next_block.pointers[i] = 0;
+        }
 
-    // // Update inode on disk
-    // inode->isvalid = 0;
-    // disk_write(thedisk, inode_block_index, inode_block.data);
+        bitmap[block.inode[ioffset].indirect] = 0;
+        block.inode[ioffset].indirect = 0;
+    }
 
-    // // Return blocks to free block map DOES NOT WORK free????
-    // union fs_block bitmap_block;
-    // for (int i = 1; i < super_block.super.nblocks; i++) {
-    //     disk_read(thedisk, i, bitmap_block.data);
-    //     if (bitmap_block.free == 0) {
-    //         bitmap_block.free = 1;
-    //         disk_write(thedisk, i, bitmap_block.data);
-    //     }
-    // }
+    // Mark inode as free
+    block.inode[ioffset].isvalid = 0;
+    block.inode[ioffset].size = 0;
 
-	return 0;
+    disk_write(thedisk, iblock, block.data);
+
+	return 1;
 }
 
 int fs_getsize( int inumber )

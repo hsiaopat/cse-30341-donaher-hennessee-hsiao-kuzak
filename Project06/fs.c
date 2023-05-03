@@ -11,44 +11,52 @@ Make your changes here.
 #include <stdint.h>
 #include <string.h>
 
+#define min(x, y) ((x < y) ? x : y)
+
 extern struct disk * thedisk;
-int * bitmap;
+int * bitmap = NULL;
 
 int fs_format()
 {
-    // FIXME: how do we check if the disk is already mounted?
+    // Check if disk is mounted
+    if (bitmap == NULL) {
 
-    // Write superblock
-    union fs_block block;
-    block.super.magic = FS_MAGIC;
-    block.super.nblocks = disk_size();
+        // Write superblock
+        union fs_block block = {{0}};
+        block.super.magic = FS_MAGIC;
+        block.super.nblocks = disk_size();
 
-    // Set aside 10% of blocks for inodes
-    block.super.ninodeblocks = block.super.nblocks / 10;
-    if (block.super.nblocks % 10 > 0) {
-        block.super.ninodeblocks++;
+        // Set aside 10% of blocks for inodes
+        block.super.ninodeblocks = block.super.nblocks / 10;
+        if (block.super.nblocks % 10 > 0) {
+            block.super.ninodeblocks++;
+        }
+
+        // Write number of inodes
+        block.super.ninodes = block.super.ninodeblocks * INODES_PER_BLOCK;
+
+        // Clear blocks, initialize to 0
+        union fs_block next_block = {{0}};
+        for (int i = 0; i < BLOCK_SIZE; i++) {
+            next_block.data[i] = 0;
+        }
+
+        for (int i = 1; i < block.super.nblocks; i++) {
+            disk_write(thedisk, i, next_block.data);
+        }
+        
+        return 1;
     }
 
-    // Write number of inodes
-    block.super.ninodes = block.super.ninodeblocks * INODES_PER_BLOCK;
+    printf("ERROR: Disk already mounted\n");
 
-    // Clear blocks, initialize to 0
-    union fs_block next_block;
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        next_block.data[i] = 0;
-    }
-
-    for (int i = 1; i < block.super.nblocks; i++) {
-        disk_write(thedisk, i, next_block.data);
-    }
-
-    return 1;
+    return 0;
 }
 
 void fs_debug()
 {
     // Read superblock from disk
-    union fs_block block;
+    union fs_block block = {{0}};
     disk_read(thedisk, 0, block.data);
 
     // Validate magic number
@@ -73,7 +81,7 @@ void fs_debug()
     for (int i = 1; i <= block.super.ninodeblocks; i++) {
         
         // Read current inode block from disk
-		union fs_block next_block;
+		union fs_block next_block = {{0}};
         disk_read(thedisk, i, next_block.data);
 
         // Loop over all inodes in a block
@@ -102,7 +110,7 @@ void fs_debug()
                 if (inode->indirect > 0 && inode->indirect < disk_size()) {
 
                     // Read indirect block from disk
-                    union fs_block indirect_block;
+                    union fs_block indirect_block = {{0}};
                     disk_read(thedisk, inode->indirect, indirect_block.data);
 
                     // Loop over pointers in indirect block
@@ -123,7 +131,7 @@ void fs_debug()
 int fs_mount()
 {
     // Read superblock from disk
-    union fs_block block;
+    union fs_block block = {{0}};
     disk_read(thedisk, 0, block.data);
 
     // Validate magic number
@@ -151,15 +159,13 @@ int fs_mount()
     }
     bitmap[0] = 1; // 1 ~ used block
 
-   
-
     // Loop over inode blocks
     for (int i = 1; i <= block.super.ninodeblocks; i++) {
         
         bitmap[i] = 1;
         
         // Read current inode block from disk
-		union fs_block next_block;
+		union fs_block next_block = {{0}};
         disk_read(thedisk, i, next_block.data);
 
         // Loop over all inodes in a block
@@ -183,7 +189,7 @@ int fs_mount()
                     bitmap[inode->indirect] = 1;
 
                     // Read indirect block from disk
-                    union fs_block indirect_block;
+                    union fs_block indirect_block = {{0}};
                     disk_read(thedisk, inode->indirect, indirect_block.data);
 
                     // Loop over pointers in indirect block
@@ -203,13 +209,13 @@ int fs_mount()
 int fs_create()
 {
     // Read inode blocks
-    union fs_block block;
+    union fs_block block = {{0}};
     disk_read(thedisk, 0, block.data);
 
     // Loop over inode blocks
     for (int i = 1; i <= block.super.ninodeblocks; i++) {
         
-        union fs_block next_block;
+        union fs_block next_block = {{0}};
         disk_read(thedisk, i, next_block.data);
 
         // Loop over inodes in block, search for free inode
@@ -240,10 +246,10 @@ int fs_create()
 int fs_delete( int inumber )
 {
     // Read inode block
-    size_t iblock = inumber/INODES_PER_BLOCK + 1;
+    size_t iblock = inumber / INODES_PER_BLOCK + 1;
     size_t ioffset = inumber % INODES_PER_BLOCK;
     
-    union fs_block block;
+    union fs_block block = {{0}};
     disk_read(thedisk, iblock, block.data);
     
     if (block.inode[ioffset].isvalid == 0) {
@@ -265,7 +271,7 @@ int fs_delete( int inumber )
     if (block.inode[ioffset].indirect > 0 && block.inode[ioffset].indirect < disk_size()) {
         
         // Read indirect block
-        union fs_block next_block;
+        union fs_block next_block = {{0}};
         disk_read(thedisk, block.inode[ioffset].indirect, next_block.data);
 
         // Loop over pointers in indirect block, update bitmap
@@ -295,10 +301,10 @@ int fs_delete( int inumber )
 int fs_getsize( int inumber )
 {
     // Read inode block
-    size_t iblock = inumber/INODES_PER_BLOCK + 1;
+    size_t iblock = inumber / INODES_PER_BLOCK + 1;
     size_t ioffset = inumber % INODES_PER_BLOCK;
 
-    union fs_block block;
+    union fs_block block = {{0}};
     disk_read(thedisk, iblock, block.data);
 
     if (block.inode[ioffset].isvalid == 0) {
@@ -314,10 +320,10 @@ int fs_read( int inumber, char *data, int length, int offset )
     size_t bytes_read = 0;
 
     // Load inode
-    size_t iblock = inumber/INODES_PER_BLOCK + 1;
+    size_t iblock = inumber / INODES_PER_BLOCK + 1;
     size_t ioffset = inumber % INODES_PER_BLOCK;
 
-    union fs_block block;
+    union fs_block block = {{0}};
     disk_read(thedisk, iblock, block.data);
 
     // Check if inode is valid
@@ -334,45 +340,40 @@ int fs_read( int inumber, char *data, int length, int offset )
         length = block.inode[ioffset].size - offset;
     }
 
-    // Calculate length to read from each inode
-    size_t to_read;
-    if (length + next_block_offset < BLOCK_SIZE) {
-        to_read = length;
-    }
-    else {
-        to_read = BLOCK_SIZE - next_block_offset;
-    }
-
     // Read blocks
-    while (bytes_read < length && logical_block < POINTERS_PER_BLOCK + POINTERS_PER_INODE) {
+    while (bytes_read < length) {
         
+        // Initialize direct block
+        union fs_block direct_block = {{0}};
+
         // If direct...
         if (logical_block < POINTERS_PER_INODE) {
 
             // Read direct block
-            union fs_block direct_block;
             disk_read(thedisk, block.inode[ioffset].direct[logical_block], direct_block.data);
-
-            // Copy to data buffer
-            memcpy(data + bytes_read, direct_block.data + next_block_offset, to_read);
-            bytes_read += to_read;
         }
 
         // If indirect...
         else {
 
             // Read indirect block
-            union fs_block indirect_block;
+            union fs_block indirect_block = {{0}};
             disk_read(thedisk, block.inode[ioffset].indirect, indirect_block.data);
 
-            // Read pointers
-            union fs_block next_block;
-            disk_read(thedisk, indirect_block.pointers[logical_block - POINTERS_PER_INODE], next_block.data);
-
-            // Copy to data buffer
-            memcpy(data + bytes_read, next_block.data + next_block_offset, to_read);
-            bytes_read += to_read;
+            // Read indirect pointer
+            disk_read(thedisk, indirect_block.pointers[logical_block - POINTERS_PER_INODE], direct_block.data);
         }
+
+        // Copy from block to data buffer
+        size_t bytes = min(BLOCK_SIZE - next_block_offset, length - bytes_read);
+        memcpy(data + bytes_read, direct_block.data + next_block_offset, bytes);
+        bytes_read += bytes;
+
+        // Set next_block_offset to 0
+        next_block_offset = 0;
+
+        // Increment logical block
+        logical_block += 1;
     }
     
 	return bytes_read;
@@ -380,20 +381,18 @@ int fs_read( int inumber, char *data, int length, int offset )
 
 int fs_write( int inumber, const char *data, int length, int offset )
 {
-    //initialize for bitmap search
+    // Initialize for bitmap search
     int found = 0;
-
-
+    
+    // Load inode information
     size_t bytes_written = 0;
-
-    // Load inode
-    size_t iblock = inumber/INODES_PER_BLOCK + 1;
+    size_t iblock = inumber / INODES_PER_BLOCK + 1;
     size_t ioffset = inumber % INODES_PER_BLOCK;
 
-    union fs_block block;
+    // Read inode
+    union fs_block block = {{0}};
     disk_read(thedisk, iblock, block.data);
 
-    // Check if inode is valid
     if (block.inode[ioffset].isvalid == 0) {
         return 0;
     }
@@ -402,10 +401,10 @@ int fs_write( int inumber, const char *data, int length, int offset )
     size_t logical_block = offset / BLOCK_SIZE;
     size_t next_block_offset = offset % BLOCK_SIZE;
 
-    // Truncate length to read if larger than inode size
-    if (length + offset > block.inode[ioffset].size) {
-        length = block.inode[ioffset].size - offset;
-    }
+    // // Truncate length to write if larger than inode size
+    // if (length + offset > block.inode[ioffset].size) {
+    //     length = block.inode[ioffset].size - offset;
+    // }
 
     // Calculate length to write from each inode
     size_t to_write;
@@ -416,48 +415,50 @@ int fs_write( int inumber, const char *data, int length, int offset )
         to_write = BLOCK_SIZE - next_block_offset;
     }
 
+    printf("%d\n", length);
+
     // Write blocks
-    while (bytes_written < length && logical_block < POINTERS_PER_BLOCK + POINTERS_PER_INODE) {
-        
+    while (bytes_written < length) {
+
         // If direct...
         if (logical_block < POINTERS_PER_INODE) {
+            
 
-            //Check if block exists and if not, allocate block
-            if(block.inode[ioffset].direct[logical_block] == 0){
-                //search bitmap, update free list, update inode, write inode change to disk
+            // Check if block exists, allocate block if not
+            if (block.inode[ioffset].direct[logical_block] == 0) {
+                
+                // Search bitmap, update free list, update inode, write inode change to disk
                 found = 0;
-                for(int i = 0; i < block.super.nblocks; i++){
-                    if(bitmap[i] == 0){
+                for (int i = 0; i < block.super.nblocks; i++) {
+                    if (bitmap[i] == 0){
                         found = 1;
                         bitmap[i] = 1;
                         block.inode[ioffset].direct[logical_block] = i;
-                        disk_write(thedisk,iblock, block.data);
+                        disk_write(thedisk, iblock, block.data);
                         break;
                     }
                 }
-                if(!found) break;
+                if (found == 0) break;
             }
 
             // Write to direct block
-            union fs_block direct_block;
-
-            // Copy to data buffer
-            memcpy(direct_block.data + next_block_offset, data + bytes_written, to_write);       
-            
-            //once copied, can write into direct block
+            union fs_block direct_block = {{0}};
+            memcpy(direct_block.data + next_block_offset, data + bytes_written, to_write);
             disk_write(thedisk, block.inode[ioffset].direct[logical_block], direct_block.data);
             bytes_written += to_write;
+
+            printf("bytes written: %ld\n", bytes_written);
         }
 
         // If indirect...
         else {
 
-            //Check if indirect block exists
-            //if not, we allocate block
-            if(block.inode[ioffset].indirect == 0){
+            // Check if indirect block exists, allocate if not
+            if (block.inode[ioffset].indirect == 0) {
+                
                 found = 0;
-                for(int i = 0; i < block.super.nblocks; i++){
-                    if(bitmap[i] == 0){
+                for (int i = 0; i < block.super.nblocks; i++) {
+                    if (bitmap[i] == 0){
                         found = 1;
                         bitmap[i] = 1;
                         block.inode[ioffset].indirect = i;
@@ -465,77 +466,80 @@ int fs_write( int inumber, const char *data, int length, int offset )
                         break;
                     }
                 }
-                if(found == 0) break;
+                if (found == 0) break;
             }
 
             // Read indirect block
-            union fs_block indirect_block;
-            if(block.inode[ioffset].indirect != 0){
+            union fs_block indirect_block = {{0}};
+
+            if (block.inode[ioffset].indirect > 0 && block.inode[ioffset].indirect < disk_size()) {
+
                 disk_read(thedisk, block.inode[ioffset].indirect, indirect_block.data);
-                for(int i = 0; i < POINTERS_PER_BLOCK; i++){
-                    if(indirect_block.pointers[i] > 1000){
+
+                for (int i = 0; i < POINTERS_PER_BLOCK; i++) {
+                    if (indirect_block.pointers[i] > 1000) { // FIXME: why 1000? maybe disk_size()?
                         indirect_block.pointers[i] = 0;
                     }
                 }
-            } else {
-                for(int i = 0; i < POINTERS_PER_BLOCK; i++){
+            } 
+            else {
+                for (int i = 0; i < POINTERS_PER_BLOCK; i++) {
                     indirect_block.pointers[i] = 0;
                 }
             }
 
-            //Check if indirect pointers exist
-            if(indirect_block.pointers[logical_block - POINTERS_PER_INODE] == 0){
-                //search bitmap, update free list, update inode, write inode change to disk
+            // Check if indirect pointers exist
+            if (indirect_block.pointers[logical_block - POINTERS_PER_INODE] == 0) {
+
+                // Search bitmap, update free list, update inode, write inode change to disk
                 found = 0;
-                for(int i = 0; i < block.super.nblocks; i++){
-                    if(bitmap[i] == 0){
+                for (int i = 0; i < block.super.nblocks; i++) {
+                    if (bitmap[i] == 0) {
                         found = 1;
                         bitmap[i] = 1;
                         indirect_block.pointers[logical_block - POINTERS_PER_INODE] = i;
-                        disk_write(thedisk,block.inode[ioffset].indirect,indirect_block.data);
+                        disk_write(thedisk, block.inode[ioffset].indirect, indirect_block.data);
                         break;
                     }
                 }
                 if(found == 0) break;
             }
 
-            // Read pointers
-            union fs_block next_block;
-
-            // Copy to data buffer
+            // Write to indirect pointers
+            union fs_block next_block = {{0}};
             memcpy(next_block.data + next_block_offset, data + bytes_written, to_write);
-            
-            // Write next block
             disk_write(thedisk, indirect_block.pointers[logical_block - POINTERS_PER_INODE], next_block.data);
-
             bytes_written += to_write;
         }
 
-        //Update inode size
-        if(offset != 0){
+        // Update inode size
+        if (offset != 0) {
             block.inode[ioffset].size += to_write;
-            disk_write(thedisk,iblock,block.data);
-        } else {
-            if(block.inode[ioffset].size > offset){
+            disk_write(thedisk, iblock, block.data);
+        } 
+        else {
+            if (block.inode[ioffset].size > offset) {
                 block.inode[ioffset].size = block.inode[ioffset].size + to_write;
-            } else {
+            } 
+            else {
                 block.inode[ioffset].size = offset + to_write;
             }
-            disk_write(thedisk, iblock,block.data);
+            disk_write(thedisk, iblock, block.data);
         }
 
-        //Update to_write
-        if(length - bytes_written > BLOCK_SIZE){
+        // Update to_write
+        if (length - bytes_written > BLOCK_SIZE) {
             to_write = BLOCK_SIZE;
-        } else {
+        } 
+        else {
             to_write = length - bytes_written;
         }
         
-        //Set next_block_offset to 0
+        // Set next_block_offset to 0
         next_block_offset = 0;
 
+        // Increment logical block
         logical_block += 1;
-
     }
     
 	return bytes_written;
